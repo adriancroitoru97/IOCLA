@@ -332,33 +332,74 @@ void tree (Dir* target, int level) {
 	}
 }
 
-void mv(Dir* parent, char *oldname, char *newname) {
-	int type = -1;  /* 0 for file, 1 for directory */
-
-	File *the_file; Dir *the_dir;
+/* checks if the mv operation is possible, returns -1 otherwise,
+   and 0(1) if the mv is on a file(dir) */
+int mv_check(Dir *parent, char *oldname, char *newname,
+			 File **the_file, Dir **the_dir) {
 	/* garbages - used just to call the function check_existance */
 	File *garbage_file; Dir *garbage_dir;
-	if (check_existance_dir(parent, oldname, &the_dir)) {
+	int type = -1;
+
+	if (check_existance_dir(parent, oldname, the_dir)) {
 		type = 1;
-	} else if(check_existance_file(parent, oldname, &the_file)) {
+	} else if(check_existance_file(parent, oldname, the_file)) {
 		type = 0;
 	}
 	if (type == -1) {
 		printf("File/Director not found\n");
-		return;
+		return -1;
 	}
 
 	if (check_existance_dir(parent, newname, &garbage_dir) ||
 		check_existance_file(parent, newname, &garbage_file)) {
 		printf("File/Director already exists\n");
+		return -1;
+	}
+
+	return type;
+}
+
+void mv(Dir* parent, char *oldname, char *newname) {
+	File *the_file; Dir *the_dir;
+
+	/* 0 for file, 1 for directory */
+	int type =  mv_check(parent, oldname, newname, &the_file, &the_dir);
+	if (type == -1) {
 		return;
 	}
 
 	if (type == 0) {  /* mv a file */
-		rm(parent, oldname);
-		touch(parent, newname);
+		strcpy(the_file->name, newname);
+
+		/* remove the links of the old file */
+		if (!strcmp(the_file->name, parent->head_children_files->name)) {
+			parent->head_children_files = the_file->next;
+			the_file->next = NULL;
+		} else {
+			File *the_file_prev = parent->head_children_files;
+			while (the_file_prev && the_file_prev->next) {
+				if (!strcmp(the_file_prev->next->name, newname)) {
+					break;
+				}
+				the_file_prev = the_file_prev->next;
+			}
+
+			the_file_prev->next = the_file->next;
+			the_file->next = NULL;
+		}
+
+		/* add the file at the end of the files list */
+		File *new_file = parent->head_children_files;
+		while (new_file && new_file->next) {
+			new_file = new_file->next;
+		}
+		if (new_file) {
+			new_file->next = the_file;
+		} else {
+			parent->head_children_files = the_file;
+		}
 	} else if (type == 1) {  /* mv a directory */
-		strcpy(the_dir->name,newname);
+		strcpy(the_dir->name, newname);
 
 		/* remove the links of the old directory */
 		if (!strcmp(the_dir->name, parent->head_children_dirs->name)) {
